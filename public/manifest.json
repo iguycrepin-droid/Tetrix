@@ -1,0 +1,21 @@
+{
+  "name": "TETRIX",
+  "short_name": "TETRIX",
+  "description": "Premium block-drop arena with synthwave style and global leaderboards",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07071a",
+  "theme_color": "#07071a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games"],
+  "lang": "en",
+  "scope": "/"
+}
