@@ -14,12 +14,10 @@ export function ProfilePage() {
   const [avatarId, setAvatarId] = useState(profile?.avatar_id ?? 0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  // Delete account state
   const [showDelete, setShowDelete] = useState(false)
   const [deleteInput, setDeleteInput] = useState('')
   const [deleting, setDeleting] = useState(false)
 
-  // FIX #12: navigate in effect not render
   useEffect(() => {
     if (!user && !loading) navigate('/login')
   }, [user, loading])
@@ -47,12 +45,20 @@ export function ProfilePage() {
     if (deleteInput !== 'DELETE') return
     setDeleting(true)
     try {
-      // Delete all user data in order
-      await supabase.from('purchases').delete().eq('user_id', user.id)
-      await supabase.from('scores').delete().eq('user_id', user.id)
-      await supabase.from('profiles').delete().eq('id', user.id)
-      await supabase.auth.admin?.deleteUser(user.id).catch(() => {})
-      // Sign out — account is deleted server-side via RLS cascade
+      // Call the delete-user Edge Function — uses service role key server-side
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Delete failed')
       await signOut()
       navigate('/login')
     } catch (err) {
@@ -85,7 +91,6 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Hero card */}
       <Card style={{ marginBottom: 16, textAlign: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
           <Avatar avatarId={editing ? avatarId : profile?.avatar_id} size={72} />
@@ -101,7 +106,6 @@ export function ProfilePage() {
             </>
           )}
 
-          {/* Rank progress */}
           <div style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(120,80,255,0.2)', borderRadius: 8, padding: '12px 16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <RankBadge score={score} />
@@ -125,7 +129,6 @@ export function ProfilePage() {
         </div>
       </Card>
 
-      {/* Stats grid */}
       <SectionTitle>{t('statistics')}</SectionTitle>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
         {stats.map(s => (
@@ -139,7 +142,6 @@ export function ProfilePage() {
         ))}
       </div>
 
-      {/* Delete account */}
       <SectionTitle>{t('deleteAccount')}</SectionTitle>
       {!showDelete ? (
         <Btn variant="danger" onClick={() => setShowDelete(true)}>{t('deleteAccount')}</Btn>

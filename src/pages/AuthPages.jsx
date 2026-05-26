@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { Input, Btn, Card, Divider } from '../components/UI'
@@ -81,7 +81,7 @@ export function RegisterPage() {
   const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [emailSent, setEmailSent] = useState(false) // FIX #11
+  const [emailSent, setEmailSent] = useState(false)
   const { signUp, signInWithGoogle } = useAuth()
   const navigate = useNavigate()
   const { t } = useI18n()
@@ -101,7 +101,7 @@ export function RegisterPage() {
       navigate('/menu')
     } catch (err) {
       if (err.code === 'CHECK_EMAIL') {
-        setEmailSent(true) // FIX #11: show confirmation message instead of error
+        setEmailSent(true)
       } else {
         setError(err.message)
       }
@@ -143,6 +143,7 @@ export function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { t } = useI18n()
+
   async function handleSubmit(e) {
     e.preventDefault()
     setLoading(true); setError('')
@@ -169,6 +170,61 @@ export function ForgotPasswordPage() {
           <Input label={t('email')} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
           {error && <div style={{ fontSize: 12, color: '#f87171' }}>{error}</div>}
           <Btn onClick={handleSubmit} loading={loading}>{t('sendResetLink')}</Btn>
+          <Link to="/login" style={{ textAlign: 'center', fontSize: 12, color: 'rgba(180,140,255,0.5)', textDecoration: 'none' }}>{t('back')}</Link>
+        </div>
+      )}
+    </AuthLayout>
+  )
+}
+
+export function ResetPasswordPage() {
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState(false)
+  const navigate = useNavigate()
+  const { t } = useI18n()
+
+  // Supabase redirects here with an access_token in the URL hash
+  // supabase-js picks it up automatically on session restore
+  useEffect(() => {
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        // Session is now set — user can update password
+      }
+    })
+  }, [])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (password.length < 6) return setError('Password must be 6+ characters')
+    if (password !== confirm) return setError('Passwords do not match')
+    setLoading(true); setError('')
+    try {
+      const { error: err } = await supabase.auth.updateUser({ password })
+      if (err) throw err
+      setDone(true)
+      setTimeout(() => navigate('/login'), 2500)
+    } catch (err) {
+      setError(err.message)
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <AuthLayout title="RESET PASSWORD" sub="Choose a new password">
+      {done ? (
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
+          <div style={{ color: '#34d399', fontFamily: "'Orbitron',sans-serif", fontSize: 12, letterSpacing: 2 }}>Password updated!</div>
+          <div style={{ fontSize: 12, color: 'rgba(180,140,255,0.5)', marginTop: 8 }}>Redirecting to login...</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Input label="New Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+          <Input label="Confirm Password" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••" />
+          {error && <div style={{ fontSize: 12, color: '#f87171' }}>{error}</div>}
+          <Btn onClick={handleSubmit} loading={loading}>Set New Password</Btn>
           <Link to="/login" style={{ textAlign: 'center', fontSize: 12, color: 'rgba(180,140,255,0.5)', textDecoration: 'none' }}>{t('back')}</Link>
         </div>
       )}

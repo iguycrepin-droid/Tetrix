@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '../lib/i18n'
 import { GameOverModal } from '../components/GameOverModal'
+import { useScores } from '../hooks/useScores'
 
 const COLS = 10, ROWS = 20, BLOCK = 24
 const COLORS = ['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#db2777','#0891b2']
@@ -26,14 +27,14 @@ const RANK_NAMES = ['BRONZE','SILVER','GOLD','PLAT','DIAMOND']
 export function GamePage() {
   const navigate = useNavigate()
   const { user, profile } = useAuth()
+  const { submitScore } = useScores()
   const adsRemoved = adsAreRemoved(profile)
   const { t } = useI18n()
 
-  // FIX #1 & #2: use a ref for reviveUsed so the rAF closure always reads current value
   const reviveUsedRef = useRef(false)
   const [boostActive, setBoostActive] = useState(false)
   const [showReviveOffer, setShowReviveOffer] = useState(false)
-  const gameStateRef = useRef('idle') // FIX #6: ref mirrors state for use inside rAF/keyboard closures
+  const gameStateRef = useRef('idle')
   const [gameState, setGameState] = useState('idle')
   const setGameStateBoth = (s) => { gameStateRef.current = s; setGameState(s) }
 
@@ -44,7 +45,9 @@ export function GamePage() {
   const animRef = useRef(null)
   const audioCtxRef = useRef(null)
 
-  const [display, setDisplay] = useState({ score: 0, level: 1, lines: 0, combo: 0, best: 0 })
+  // Fix: use state for best score so it updates reactively
+  const [bestScore, setBestScore] = useState(() => parseInt(localStorage.getItem('tetrix_best') || '0'))
+  const [display, setDisplay] = useState({ score: 0, level: 1, lines: 0, combo: 0 })
   const [gameResult, setGameResult] = useState(null)
   const [comboText, setComboText] = useState('')
   const [showComboFlash, setShowComboFlash] = useState(false)
@@ -62,7 +65,6 @@ export function GamePage() {
     if (settings.sfxOn === false) return
     const vol = settings.sfxVol ?? 0.8
     try {
-      // FIX #3: removed dead osc/gain nodes — only use the plays() helper
       const t = ac.currentTime
       const plays = (freqs, oscType='sine') => {
         freqs.forEach(([f, start, dur, v=vol]) => {
@@ -164,7 +166,6 @@ export function GamePage() {
     s.score += Math.floor((SCORES[cleared]*s.level + comboBonus + btbBonus) * (s.scoreMultiplier||1))
     s.lines += cleared
     if (isTetris) { playSound('tetris'); s.btb=true } else { playSound('clear'); s.btb=false }
-    // FIX #5: removed dead settings block
     if (s.combo>1) { setComboText(`${s.combo}x COMBO`); setShowComboFlash(true); setTimeout(()=>setShowComboFlash(false),800) }
     const newLevel = Math.min(20, Math.floor(s.lines/10)+1)
     if (newLevel > s.level) { s.level=newLevel; playSound('levelup') }
@@ -179,10 +180,12 @@ export function GamePage() {
     spawnPiece(s)
     setGameStateBoth('playing')
     setGameResult(null)
-    reviveUsedRef.current = false // FIX #1: reset ref not state
+    reviveUsedRef.current = false
     setBoostActive(withBoost)
     setShowReviveOffer(false)
-    setDisplay({ score: 0, level: 1, lines: 0, combo: 0, best: parseInt(localStorage.getItem('tetrix_best')||'0') })
+    const storedBest = parseInt(localStorage.getItem('tetrix_best') || '0')
+    setBestScore(storedBest)
+    setDisplay({ score: 0, level: 1, lines: 0, combo: 0 })
     if (animRef.current) cancelAnimationFrame(animRef.current)
     s.lastTime = performance.now()
     animRef.current = requestAnimationFrame(loop)
@@ -196,7 +199,7 @@ export function GamePage() {
   function loop(ts) {
     const s = stateRef.current
     if (!s || !canvasRef.current) return
-    if (gameStateRef.current !== 'playing') return // FIX #6: use ref not stale closure
+    if (gameStateRef.current !== 'playing') return
     const dt = ts - s.lastTime; s.lastTime = ts
     s.dropAcc += dt
     const speed = SPEED_TABLE[Math.min(s.level-1, SPEED_TABLE.length-1)]
@@ -211,17 +214,19 @@ export function GamePage() {
       }
     }
     drawBoard()
-    setDisplay({ score: s.score, level: s.level, lines: s.lines, combo: s.combo,
-      best: Math.max(s.score, parseInt(localStorage.getItem('tetrix_best')||'0')) })
+    // Fix: update bestScore state reactively
+    const currentBest = Math.max(s.score, parseInt(localStorage.getItem('tetrix_best') || '0'))
+    setDisplay({ score: s.score, level: s.level, lines: s.lines, combo: s.combo })
+    setBestScore(currentBest)
     animRef.current = requestAnimationFrame(loop)
   }
 
   function endGame(s) {
     cancelAnimationFrame(animRef.current)
     playSound('gameover')
-    const best = Math.max(s.score, parseInt(localStorage.getItem('tetrix_best')||'0'))
+    const best = Math.max(s.score, parseInt(localStorage.getItem('tetrix_best') || '0'))
     localStorage.setItem('tetrix_best', best)
-    // FIX #1/#2: read from ref — always current, never stale
+    setBestScore(best)
     if (!reviveUsedRef.current) {
       setShowReviveOffer(true)
       return
@@ -230,10 +235,15 @@ export function GamePage() {
   }
 
   function finalizeGameOver(s) {
-    const best = Math.max(s.score, parseInt(localStorage.getItem('tetrix_best')||'0'))
+    const best = Math.max(s.score, parseInt(localStorage.getItem('tetrix_best') || '0'))
     localStorage.setItem('tetrix_best', best)
+    setBestScore(best)
     setGameStateBoth('gameover')
     setGameResult({ score: s.score, level: s.level, lines: s.lines, maxCombo: s.maxCombo, duration: Date.now()-s.startTime })
+    // Submit score to Supabase
+    if (user) {
+      submitScore({ score: s.score, level: s.level, lines: s.lines, duration: Date.now()-s.startTime })
+    }
     maybeShowInterstitial(adsRemoved)
   }
 
@@ -242,7 +252,7 @@ export function GamePage() {
     const result = await showRewardedAd('revive', adsRemoved)
     const s = stateRef.current
     if (result.granted && s) {
-      reviveUsedRef.current = true // FIX #1: set ref
+      reviveUsedRef.current = true
       s.board.splice(0, 4)
       while (s.board.length < ROWS) s.board.unshift(Array(COLS).fill(0))
       if (!spawnPiece(s)) { finalizeGameOver(s); return }
@@ -261,7 +271,7 @@ export function GamePage() {
 
   function togglePause() {
     const s = stateRef.current; if (!s) return
-    if (gameStateRef.current === 'playing') { // FIX #6: use ref
+    if (gameStateRef.current === 'playing') {
       cancelAnimationFrame(animRef.current)
       setGameStateBoth('paused')
     } else if (gameStateRef.current === 'paused') {
@@ -384,7 +394,6 @@ export function GamePage() {
     })
   }
 
-  // FIX #6: keyboard handler uses refs — no stale closure issues
   useEffect(() => {
     function onKey(e) {
       const gs = gameStateRef.current
@@ -400,11 +409,10 @@ export function GamePage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, []) // FIX #6: empty deps — uses refs internally, never stale
+  }, [])
 
   useEffect(() => { drawBoard(); drawHold(); drawNext() }, [])
 
-  const best = parseInt(localStorage.getItem('tetrix_best')||'0')
   const rankIdx = RANK_THRESHOLDS.reduce((acc,t,i)=>display.score>=t?i:acc,0)
 
   function tc(action) {
@@ -473,7 +481,7 @@ export function GamePage() {
             <canvas ref={nextRef} width={90} height={200} style={{ display:'block', margin:'0 auto' }} />
           </Panel>
           <Panel label={t('combo')}><Stat>x{display.combo}</Stat></Panel>
-          <Panel label={t('best')}><Stat style={{ fontSize:12 }}>{Math.max(display.best,best).toLocaleString()}</Stat></Panel>
+          <Panel label={t('best')}><Stat style={{ fontSize:12 }}>{bestScore.toLocaleString()}</Stat></Panel>
           <button onClick={togglePause} style={{ fontFamily:"'Orbitron',sans-serif", fontSize:9, letterSpacing:1, background:'rgba(120,80,255,0.1)', border:'1px solid rgba(120,80,255,0.3)', color:'#c084fc', borderRadius:6, padding:'8px 4px', cursor:'pointer' }}>
             {gameState==='paused'?t('resume').replace('▶ ',''):t('pause')}
           </button>

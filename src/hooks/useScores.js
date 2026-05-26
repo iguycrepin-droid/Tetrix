@@ -7,7 +7,6 @@ export function useScores() {
   async function submitScore({ score, level, lines, duration }) {
     if (!user) return
 
-    // Insert score record
     const { error: scoreError } = await supabase.from('scores').insert({
       user_id: user.id,
       score,
@@ -17,7 +16,6 @@ export function useScores() {
     })
     if (scoreError) console.warn('Score insert failed:', scoreError.message)
 
-    // Update profile stats — use current profile values if available, else start from 0
     const current = profile || {}
     const updates = {
       total_games: (current.total_games || 0) + 1,
@@ -39,16 +37,29 @@ export function useScores() {
   async function getLeaderboard(type = 'alltime', limit = 100) {
     if (type === 'weekly') {
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const { data } = await supabase
+      // Fix: use two separate queries to avoid join RLS issues
+      const { data: scores } = await supabase
         .from('scores')
-        .select('score, level_reached, lines_cleared, created_at, user_id, profiles(username, avatar_id)')
+        .select('score, level_reached, lines_cleared, created_at, user_id')
         .gte('created_at', weekAgo)
         .order('score', { ascending: false })
         .limit(limit)
-      return (data || []).map(row => ({
+
+      if (!scores || scores.length === 0) return []
+
+      // Fetch profiles for the user_ids we got
+      const userIds = [...new Set(scores.map(s => s.user_id))]
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_id')
+        .in('id', userIds)
+
+      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
+
+      return scores.map(row => ({
         ...row,
-        username: row.profiles?.username,
-        avatar_id: row.profiles?.avatar_id,
+        username: profileMap[row.user_id]?.username,
+        avatar_id: profileMap[row.user_id]?.avatar_id,
         best_score: row.score,
         best_level: row.level_reached,
       }))

@@ -5,7 +5,7 @@ import { ConsentProvider, useConsent } from './components/ConsentBanner'
 import { I18nProvider } from './lib/i18n'
 import { SplashScreen } from './components/SplashScreen'
 import { ConsentBanner } from './components/ConsentBanner'
-import { LoginPage, RegisterPage, ForgotPasswordPage } from './pages/AuthPages'
+import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage } from './pages/AuthPages'
 import { MenuPage } from './pages/MenuPage'
 import { GamePage } from './pages/GamePage'
 import { LeaderboardPage } from './pages/LeaderboardPage'
@@ -31,6 +31,7 @@ function AppInner() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/menu" element={<MenuPage />} />
         <Route path="/game" element={<GamePage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
@@ -48,13 +49,13 @@ function AppInner() {
 export default function App() {
   return (
     <I18nProvider>
-      <ConsentProvider>
-        <AuthProvider>
-          <BrowserRouter>
+      <BrowserRouter>
+        <ConsentProvider>
+          <AuthProvider>
             <AppInner />
-          </BrowserRouter>
-        </AuthProvider>
-      </ConsentProvider>
+          </AuthProvider>
+        </ConsentProvider>
+      </BrowserRouter>
     </I18nProvider>
   )
 }

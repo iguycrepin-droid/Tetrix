@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useEffect } from 'react'
 import { initAdMob, showBanner } from '../lib/admob'
 import { adsAreRemoved } from '../lib/iap'
@@ -9,15 +9,18 @@ import { useI18n } from '../lib/i18n'
 export function MenuPage() {
   const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const adsRemoved = adsAreRemoved(profile)
   const { t } = useI18n()
+
+  // Fix: respect ?guest=1 — treat as guest even if user is technically logged in
+  const isGuest = !user || searchParams.get('guest') === '1'
 
   useEffect(() => {
     initAdMob(adsRemoved).then(() => {
       if (!adsRemoved) showBanner(adsRemoved)
     })
   }, [adsRemoved])
-  const isGuest = !user
 
   return (
     <div style={{
@@ -29,7 +32,6 @@ export function MenuPage() {
         radial-gradient(ellipse at 80% 80%, rgba(56,189,248,0.06) 0%, transparent 50%)
       `,
     }}>
-      {/* Logo */}
       <div style={{ marginBottom: 40, textAlign: 'center' }}>
         <div style={{
           fontFamily: "'Orbitron',sans-serif", fontSize: 48, fontWeight: 900,
@@ -42,7 +44,6 @@ export function MenuPage() {
         </div>
       </div>
 
-      {/* Player card */}
       <Card style={{ width: '100%', maxWidth: 340, marginBottom: 24 }}>
         {isGuest ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -70,7 +71,6 @@ export function MenuPage() {
         )}
       </Card>
 
-      {/* Menu buttons */}
       <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Btn onClick={() => navigate('/game')} style={{ fontSize: 14, padding: '16px', letterSpacing: 3 }}>
           {t('play')}
@@ -89,7 +89,6 @@ export function MenuPage() {
         )}
       </div>
 
-      {/* Quick stats */}
       {!isGuest && profile && (
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10,
