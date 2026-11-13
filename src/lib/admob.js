@@ -1,11 +1,38 @@
-// AdMob integration via @capacitor-community/admob
-// Falls back gracefully on web (dev/Vercel)
-// Ad unit IDs — replace test IDs with real ones before Play Store release
+import { isNativeApp } from './platform'
 
-const AD_UNITS = {
-  banner:       'ca-app-pub-7225653287350149/4233239144',
-  interstitial: 'ca-app-pub-7225653287350149/8771249959',
-  rewarded:     'ca-app-pub-7225653287350149/6599170734',
+const CONSENT_KEY = 'tetrix_consent_v1'
+
+const TEST_APP_UNITS = {
+  banner: 'ca-app-pub-3940256099942544/6300978111',
+  interstitial: 'ca-app-pub-3940256099942544/1033173712',
+  rewarded: 'ca-app-pub-3940256099942544/5224354917',
+}
+
+export function readConsent() {
+  try { return JSON.parse(localStorage.getItem(CONSENT_KEY) || 'null') }
+  catch { return null }
+}
+
+export function adsConsentGranted() {
+  return readConsent()?.ads === true
+}
+
+function liveAdsRequested() {
+  return import.meta.env.PROD && import.meta.env.VITE_ADMOB_USE_LIVE === 'true'
+}
+
+function adUnits() {
+  if (!liveAdsRequested()) return TEST_APP_UNITS
+  const live = {
+    banner: import.meta.env.VITE_ADMOB_BANNER_ID,
+    interstitial: import.meta.env.VITE_ADMOB_INTERSTITIAL_ID,
+    rewarded: import.meta.env.VITE_ADMOB_REWARDED_ID,
+  }
+  if (!live.banner || !live.interstitial || !live.rewarded) {
+    console.warn('[Tetrix] VITE_ADMOB_USE_LIVE is set but one or more ad unit ids are missing.')
+    return null
+  }
+  return live
 }
 
 let AdMob = null
@@ -14,25 +41,29 @@ let gameOverCount = 0
 let interstitialReady = false
 
 async function getAdMob() {
+  if (!isNativeApp()) return null
   if (AdMob) return AdMob
   try {
     const mod = await import('@capacitor-community/admob')
     AdMob = mod.AdMob
     return AdMob
   } catch {
-    return null // web — no plugin
+    return null
   }
 }
 
 export async function initAdMob(adsRemoved = false) {
-  if (initialized || adsRemoved) return
+  if (adsRemoved || !adsConsentGranted()) return
+  if (initialized) return
+  const units = adUnits()
+  if (!units) return
   const am = await getAdMob()
   if (!am) return
   try {
     await am.initialize({
       requestTrackingAuthorization: true,
       testingDevices: [],
-      initializeForTesting: false,
+      initializeForTesting: !liveAdsRequested(),
     })
     initialized = true
     await preloadInterstitial()
@@ -41,18 +72,19 @@ export async function initAdMob(adsRemoved = false) {
   }
 }
 
-// ─── Banner ───────────────────────────────────────────────────
 export async function showBanner(adsRemoved = false) {
-  if (adsRemoved) return
+  if (adsRemoved || !adsConsentGranted()) return
+  const units = adUnits()
+  if (!units) return
   const am = await getAdMob()
   if (!am) return
   try {
     await am.showBanner({
-      adId: AD_UNITS.banner,
+      adId: units.banner,
       adSize: 'BANNER',
       position: 'BOTTOM_CENTER',
       margin: 0,
-      isTesting: false,
+      isTesting: !liveAdsRequested(),
     })
   } catch (e) { console.warn('Banner failed:', e) }
 }
@@ -60,60 +92,60 @@ export async function showBanner(adsRemoved = false) {
 export async function hideBanner() {
   const am = await getAdMob()
   if (!am) return
-  try { await am.hideBanner() } catch {}
+  try { await am.hideBanner() } catch { /* web or already hidden */ }
 }
 
 export async function removeBanner() {
   const am = await getAdMob()
   if (!am) return
-  try { await am.removeBanner() } catch {}
+  try { await am.removeBanner() } catch { /* web or already removed */ }
 }
 
-// ─── Interstitial ─────────────────────────────────────────────
-// Show every 4th game over
 async function preloadInterstitial() {
+  const units = adUnits()
+  if (!units || !adsConsentGranted()) return
   const am = await getAdMob()
   if (!am) return
   try {
-    await am.prepareInterstitial({ adId: AD_UNITS.interstitial, isTesting: false })
+    await am.prepareInterstitial({ adId: units.interstitial, isTesting: !liveAdsRequested() })
     interstitialReady = true
   } catch (e) { console.warn('Interstitial preload failed:', e) }
 }
 
 export async function maybeShowInterstitial(adsRemoved = false) {
-  if (adsRemoved) return
+  if (adsRemoved || !adsConsentGranted()) return
   gameOverCount++
-  if (gameOverCount % 4 !== 0) return // only every 4th
-  if (!interstitialReady) return
+  if (gameOverCount % 4 !== 0 || !interstitialReady) return
   const am = await getAdMob()
   if (!am) return
   try {
     await am.showInterstitial()
     interstitialReady = false
-    await preloadInterstitial() // preload next one
+    await preloadInterstitial()
   } catch (e) { console.warn('Interstitial show failed:', e) }
 }
 
-// ─── Rewarded ─────────────────────────────────────────────────
-// Returns: { type: 'revive' | 'boost', granted: boolean }
 export async function showRewardedAd(type = 'revive', adsRemoved = false) {
+  if (!adsConsentGranted()) return { type, granted: false, reason: 'consent' }
   const am = await getAdMob()
   if (!am) {
-    // Web fallback: simulate reward grant for testing
     if (import.meta.env.DEV) {
+      const mult = adsRemoved ? '2.5×' : '1.25×'
       return new Promise(resolve => {
         const confirmed = window.confirm(
           type === 'revive'
             ? '[DEV] Watch ad to REVIVE? (simulated)'
-            : '[DEV] Watch ad for 1.25x SCORE BOOST? (simulated)'
+            : `[DEV] Watch ad for ${mult} SCORE BOOST? (simulated)`
         )
         resolve({ type, granted: confirmed })
       })
     }
     return { type, granted: false }
   }
+  const units = adUnits()
+  if (!units) return { type, granted: false }
   try {
-    await am.prepareRewardVideoAd({ adId: AD_UNITS.rewarded, isTesting: false })
+    await am.prepareRewardVideoAd({ adId: units.rewarded, isTesting: !liveAdsRequested() })
     const result = await am.showRewardVideoAd()
     return { type, granted: !!result?.value }
   } catch (e) {

@@ -78,6 +78,9 @@ export function LeaderboardPage() {
       )}
 
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      {tab === 'weekly' && (
+        <div style={{ fontSize: 11, color: 'rgba(180,140,255,0.45)', margin: '0 0 12px', textAlign: 'center' }}>{t('weeklyReset')}</div>
+      )}
 
       {/* Error state */}
       {error && (

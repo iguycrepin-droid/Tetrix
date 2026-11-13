@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { Input, Btn, Card, Divider } from '../components/UI'
 import { useI18n } from '../lib/i18n'
-import { supabase } from '../lib/supabase'
+import { supabase, SUPABASE_SETUP_MESSAGE } from '../lib/supabase'
 
 function AuthLayout({ children, title, sub }) {
   return (
@@ -148,6 +148,7 @@ export function ForgotPasswordPage() {
     e.preventDefault()
     setLoading(true); setError('')
     try {
+      if (!supabase) throw new Error(SUPABASE_SETUP_MESSAGE)
       const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`
       })
@@ -189,11 +190,9 @@ export function ResetPasswordPage() {
   // Supabase redirects here with an access_token in the URL hash
   // supabase-js picks it up automatically on session restore
   useEffect(() => {
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        // Session is now set — user can update password
-      }
-    })
+    if (!supabase) return undefined
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {})
+    return () => subscription.unsubscribe()
   }, [])
 
   async function handleSubmit(e) {
@@ -202,6 +201,7 @@ export function ResetPasswordPage() {
     if (password !== confirm) return setError('Passwords do not match')
     setLoading(true); setError('')
     try {
+      if (!supabase) throw new Error(SUPABASE_SETUP_MESSAGE)
       const { error: err } = await supabase.auth.updateUser({ password })
       if (err) throw err
       setDone(true)

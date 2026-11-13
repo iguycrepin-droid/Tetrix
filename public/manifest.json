@@ -1,7 +1,7 @@
 {
   "name": "TETRIX",
   "short_name": "TETRIX",
-  "description": "Premium block-drop arena with synthwave style and global leaderboards",
+  "description": "Synthwave block-drop arena with global leaderboards and a daily goal",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

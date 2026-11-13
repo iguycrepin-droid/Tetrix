@@ -1,17 +1,27 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
+
+const capacitorBuild = process.env.CAPACITOR === '1'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    !capacitorBuild && VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      includeAssets: ['icon.svg'],
+      manifest: false,
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,ico,webmanifest}'],
+        navigateFallback: '/index.html',
+      },
+      devOptions: { enabled: false },
+    }),
+  ].filter(Boolean),
   server: { port: 5173 },
-  build: {
-    rollupOptions: {
-      // Capacitor plugins only exist on device — mark as external for web build
-      external: [
-        '@capacitor-community/admob',
-        '@capacitor-community/in-app-purchases',
-        '@capacitor/core',
-      ]
-    }
-  }
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.js'],
+  },
 })

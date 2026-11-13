@@ -1,5 +1,7 @@
 # TETRIX — Phase 3: Android & Play Store Setup Guide
 
+The current setup guide is [README.md](README.md). Ad unit ids are no longer hardcoded: development uses Google's test ids, and live ids come from env vars (see `.env.example`). The billing plugin is `@capgo/native-purchases@6.0.42` (the `@capacitor-community/in-app-purchases` package is not published). Do not upgrade Capacitor in order to take a newer major of that plugin until a planned framework upgrade.
+
 ## Overview
 
 Phase 3 adds:
@@ -67,7 +69,7 @@ After running `npx cap add android`, add inside `<application>`:
 
 ### 3a. Add In-App Purchase plugin
 ```bash
-npm install @capacitor-community/in-app-purchases
+npm install @capgo/native-purchases@6.0.42
 npx cap sync android
 ```
 

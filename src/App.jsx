@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AuthProvider } from './hooks/useAuth'
 import { ConsentProvider, useConsent } from './components/ConsentBanner'
 import { I18nProvider } from './lib/i18n'
@@ -15,10 +15,13 @@ import { StorePage } from './pages/StorePage'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { TermsOfUsePage } from './pages/TermsOfUsePage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { initIAP } from './lib/iap'
 
 function AppInner() {
   const [splashDone, setSplashDone] = useState(false)
   const { needsConsent, grantAll, grantEssentialOnly } = useConsent()
+
+  useEffect(() => { initIAP() }, [])
 
   return (
     <>

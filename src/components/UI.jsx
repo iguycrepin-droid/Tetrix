@@ -1,5 +1,3 @@
-import { useState } from 'react'
-
 const AVATARS = [
   { bg: '#4c1d95', accent: '#c084fc', symbol: '🐺' }, // Purple Wolf
   { bg: '#1e3a8a', accent: '#60a5fa', symbol: '🦅' }, // Blue Eagle

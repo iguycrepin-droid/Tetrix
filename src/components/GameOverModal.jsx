@@ -1,36 +1,23 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { useScores } from '../hooks/useScores'
 import { useI18n } from '../lib/i18n'
 import { RankBadge, Btn, getRank } from './UI'
 
 export function GameOverModal({ result, onReplay, onMenu, onBoostAd, adsRemoved }) {
-  const { user, profile } = useAuth()
-  const { submitScore } = useScores()
+  const { user } = useAuth()
   const { t } = useI18n()
   const navigate = useNavigate()
-  const submittedRef = useRef(false)
   const [rank, setRank] = useState(null)
 
   useEffect(() => {
-    if (result && !submittedRef.current) {
-      submittedRef.current = true
-      setRank(getRank(result.score))
-      if (user) {
-        submitScore({
-          score: result.score,
-          level: result.level,
-          lines: result.lines,
-          duration: result.duration,
-        })
-      }
-    }
+    if (result) setRank(getRank(result.score))
   }, [result])
 
   if (!result) return null
 
-  const isNewBest = result.score > (profile?.best_score || 0)
+  const isNewBest = Boolean(result.isNewBest)
+  const dailyLabel = result.daily?.met ? t('dailyDone') : null
 
   return (
     <div style={{
@@ -55,6 +42,9 @@ export function GameOverModal({ result, onReplay, onMenu, onBoostAd, adsRemoved 
             <div style={{ marginTop: 8, fontFamily: "'Orbitron',sans-serif", fontSize: 11, color: '#fbbf24', letterSpacing: 2, textShadow: '0 0 12px #fbbf2488' }}>
               {t('newBest')}
             </div>
+          )}
+          {dailyLabel && (
+            <div style={{ marginTop: 8, fontSize: 11, color: '#34d399', letterSpacing: 1 }}>{dailyLabel}</div>
           )}
         </div>
 

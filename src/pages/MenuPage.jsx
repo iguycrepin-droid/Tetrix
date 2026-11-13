@@ -1,10 +1,13 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useEffect } from 'react'
-import { initAdMob, showBanner } from '../lib/admob'
+import { initAdMob, showBanner, hideBanner, adsConsentGranted } from '../lib/admob'
 import { adsAreRemoved } from '../lib/iap'
 import { useAuth } from '../hooks/useAuth'
 import { Avatar, RankBadge, Btn, Card } from '../components/UI'
 import { useI18n } from '../lib/i18n'
+import { useConsent } from '../components/ConsentBanner'
+import { supabaseConfigured, SUPABASE_SETUP_MESSAGE } from '../lib/supabase'
+import { dailyGoal, isDailyComplete } from '../lib/daily'
 
 export function MenuPage() {
   const { user, profile, signOut } = useAuth()
@@ -12,15 +15,21 @@ export function MenuPage() {
   const [searchParams] = useSearchParams()
   const adsRemoved = adsAreRemoved(profile)
   const { t } = useI18n()
+  const { consent } = useConsent()
+  const goal = dailyGoal()
+  const dailyDone = isDailyComplete(goal.day)
 
   // Fix: respect ?guest=1 — treat as guest even if user is technically logged in
   const isGuest = !user || searchParams.get('guest') === '1'
 
   useEffect(() => {
-    initAdMob(adsRemoved).then(() => {
-      if (!adsRemoved) showBanner(adsRemoved)
-    })
-  }, [adsRemoved])
+    const allowed = adsConsentGranted() && !adsRemoved
+    if (!allowed) {
+      hideBanner()
+      return
+    }
+    initAdMob(false).then(() => showBanner(false))
+  }, [adsRemoved, consent])
 
   return (
     <div style={{
@@ -71,6 +80,19 @@ export function MenuPage() {
         )}
       </Card>
 
+      {!supabaseConfigured && (
+        <div style={{ width: '100%', maxWidth: 340, marginBottom: 16, fontSize: 12, lineHeight: 1.5, color: '#fbbf24', textAlign: 'center' }}>
+          {SUPABASE_SETUP_MESSAGE}
+        </div>
+      )}
+
+      <Card style={{ width: '100%', maxWidth: 340, marginBottom: 16 }}>
+        <div style={{ fontFamily: "'Orbitron',sans-serif", fontSize: 10, letterSpacing: 2, color: 'rgba(180,140,255,0.55)', marginBottom: 6 }}>{t('dailyTitle')}</div>
+        <div style={{ fontSize: 13, color: dailyDone ? '#34d399' : '#e0e0ff' }}>
+          {dailyDone ? t('dailyDone') : dailyText(t, goal)}
+        </div>
+      </Card>
+
       <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Btn onClick={() => navigate('/game')} style={{ fontSize: 14, padding: '16px', letterSpacing: 3 }}>
           {t('play')}
@@ -115,4 +137,11 @@ export function MenuPage() {
       <div style={{ marginTop: 32, fontSize: 10, color: 'rgba(120,80,255,0.3)', letterSpacing: 2 }}>v1.0</div>
     </div>
   )
+}
+
+function dailyText(t, goal) {
+  if (goal.type === 'lines') return t('dailyLines').replace('{n}', String(goal.target))
+  if (goal.type === 'score') return t('dailyScore').replace('{n}', goal.target.toLocaleString())
+  if (goal.type === 'tetris') return t('dailyTetris')
+  return t('dailyTspin')
 }
