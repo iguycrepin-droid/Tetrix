@@ -1,5 +1,7 @@
 # TETRIX — Phase 4: Production Checklist & Android Setup
 
+The current setup guide is [README.md](README.md). Consent is required before any AdMob request. Account deletion is the `delete-user` Edge Function plus the DELETE policies in `supabase_schema.sql`.
+
 ## ✅ What Phase 4 Added
 
 - Animated splash screen (2.4 second branded intro)

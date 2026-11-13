@@ -1,0 +1,10 @@
+project_id = "tetrix"
+
+[functions.submit-score]
+verify_jwt = true
+
+[functions.verify-purchase]
+verify_jwt = true
+
+[functions.delete-user]
+verify_jwt = true

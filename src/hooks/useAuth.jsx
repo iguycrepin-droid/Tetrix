@@ -1,15 +1,22 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseConfigured, SUPABASE_SETUP_MESSAGE } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+
+function offlineError() {
+  return Object.assign(new Error(SUPABASE_SETUP_MESSAGE), { code: 'OFFLINE' })
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(supabaseConfigured)
 
   useEffect(() => {
+    if (!supabase) return undefined
+    let cancelled = false
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return
       setUser(session?.user ?? null)
       if (session?.user) fetchProfile(session.user.id, session.user)
       else setLoading(false)
@@ -19,13 +26,16 @@ export function AuthProvider({ children }) {
       if (session?.user) fetchProfile(session.user.id, session.user)
       else { setProfile(null); setLoading(false) }
     })
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function fetchProfile(userId, authUser) {
+    if (!supabase) return null
     let { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
 
-    // BUG FIX: Google OAuth users have no profile row — create it on first login
     if (!data) {
       const fallbackUser = authUser || { email: '', user_metadata: {} }
       const emailName = (fallbackUser.email || '').split('@')[0] || 'Player'
@@ -36,10 +46,6 @@ export function AuthProvider({ children }) {
         id: userId,
         username: username || 'Player',
         avatar_id: Math.floor(Math.random() * 8),
-        best_score: 0,
-        total_games: 0,
-        total_lines: 0,
-        playtime_seconds: 0,
       }).select().single()
 
       data = inserted
@@ -47,9 +53,11 @@ export function AuthProvider({ children }) {
 
     setProfile(data)
     setLoading(false)
+    return data
   }
 
   async function signUp(email, password, username) {
+    if (!supabase) throw offlineError()
     const { data, error } = await supabase.auth.signUp({ email, password })
     if (error) throw error
     if (data.user) {
@@ -57,10 +65,6 @@ export function AuthProvider({ children }) {
         id: data.user.id,
         username,
         avatar_id: Math.floor(Math.random() * 8),
-        best_score: 0,
-        total_games: 0,
-        total_lines: 0,
-        playtime_seconds: 0,
       })
       if (data.session) {
         await fetchProfile(data.user.id, data.user)
@@ -73,12 +77,14 @@ export function AuthProvider({ children }) {
   }
 
   async function signIn(email, password) {
+    if (!supabase) throw offlineError()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
     return data
   }
 
   async function signInWithGoogle() {
+    if (!supabase) throw offlineError()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin }
@@ -87,25 +93,21 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
+    if (!supabase) return
     await supabase.auth.signOut()
   }
 
   async function updateProfile(updates) {
-    if (!user) return
-    // Plain UPDATE — covered by RLS policy "Users can update own profile"
+    if (!supabase || !user) throw offlineError()
+    const safe = {}
+    if (typeof updates.username === 'string') safe.username = updates.username
+    if (updates.avatar_id !== undefined) safe.avatar_id = updates.avatar_id
     const { data, error } = await supabase.from('profiles')
-      .update(updates)
+      .update(safe)
       .eq('id', user.id)
       .select().single()
     if (error) {
       console.warn('updateProfile error:', error.message)
-      // If row doesn't exist yet (Google OAuth edge case), create it
-      if (error.code === 'PGRST116' || error.message.includes('0 rows')) {
-        const { data: inserted } = await supabase.from('profiles')
-          .insert({ id: user.id, ...updates })
-          .select().single()
-        if (inserted) { setProfile(prev => ({ ...prev, ...inserted })); return inserted }
-      }
       throw error
     }
     setProfile(data)
@@ -130,7 +132,10 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signInWithGoogle, signOut, updateProfile, fetchProfile }}>
+    <AuthContext.Provider value={{
+      user, profile, loading, configured: supabaseConfigured,
+      signUp, signIn, signInWithGoogle, signOut, updateProfile, fetchProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   )

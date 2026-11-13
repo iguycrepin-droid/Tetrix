@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseConfigured, SUPABASE_SETUP_MESSAGE } from '../lib/supabase'
 import { useI18n } from '../lib/i18n'
 import { Avatar, AvatarPicker, RankBadge, Input, Btn, Card, SectionTitle, getRank, RANK_INFO } from '../components/UI'
 
@@ -46,19 +46,17 @@ export function ProfilePage() {
     setDeleting(true)
     try {
       // Call the delete-user Edge Function — uses service role key server-side
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Delete failed')
+      if (!supabaseConfigured || !supabase) throw new Error(SUPABASE_SETUP_MESSAGE)
+      const { data, error } = await supabase.functions.invoke('delete-user', { method: 'POST' })
+      if (error) {
+        let message = error.message || 'Delete failed'
+        try {
+          const body = await error.context?.json?.()
+          if (body?.error) message = body.error
+        } catch { /* no json body */ }
+        throw new Error(message)
+      }
+      if (data && data.ok === false) throw new Error(data.error || 'Delete failed')
       await signOut()
       navigate('/login')
     } catch (err) {

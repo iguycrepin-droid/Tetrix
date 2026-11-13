@@ -1,0 +1,30 @@
+# Dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+dev-dist/
+.vite/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+
+# Capacitor / Android (generate locally; do not commit)
+android/
+ios/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Logs and OS
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Vercel / coverage
+.vercel/
+coverage/
+*.local

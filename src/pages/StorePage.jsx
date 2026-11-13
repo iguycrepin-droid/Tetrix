@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { purchaseRemoveAds, restorePurchases, getProducts, adsAreRemoved } from '../lib/iap'
+import { purchaseRemoveAds, restorePurchases, getProducts, adsAreRemoved, initIAP } from '../lib/iap'
 import { Card, Btn, SectionTitle } from '../components/UI'
 import { useI18n } from '../lib/i18n'
 
@@ -17,6 +17,7 @@ export function StorePage() {
   const { t } = useI18n()
 
   useEffect(() => {
+    initIAP()
     getProducts().then(products => {
       if (products.length) setProduct(products[0])
     })
@@ -25,7 +26,7 @@ export function StorePage() {
   async function handlePurchase() {
     if (!user) { navigate('/login'); return }
     setLoading(true); setMessage(null)
-    const result = await purchaseRemoveAds(user.id)
+    const result = await purchaseRemoveAds()
     if (result.success) {
       await fetchProfile(user.id)
       setMessage({ type: 'success', text: '🎉 Ads removed! Thank you for your support.' })
@@ -106,7 +107,7 @@ export function StorePage() {
           {[
             { icon: '✓', text: 'No banner ads on menus' },
             { icon: '✓', text: 'No interstitial ads between games' },
-            { icon: '★', text: 'Optional rewarded ads give 2× bonus' },
+            { icon: '★', text: alreadyOwned ? t('boostAdDescOwned') : t('boostAdDesc') },
             { icon: '★', text: 'Synced to your account — survives reinstalls' },
           ].map((item, i) => (
             <div key={i} style={{ display: 'flex', gap: 10, padding: '5px 0', borderBottom: i < 3 ? '1px solid rgba(120,80,255,0.07)' : 'none' }}>

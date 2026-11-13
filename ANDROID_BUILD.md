@@ -1,5 +1,9 @@
 # TETRIX — Android APK & AAB Build Guide
 
+The current setup guide is [README.md](README.md). This file is the Android build checklist. `android/` is generated locally and is not committed.
+
+Use Google's test AdMob app id (below) unless you are building a store binary with `ADMOB_USE_LIVE=true` and `ADMOB_APP_ID` set. See `.env.example`.
+
 ## Prerequisites
 - Android Studio installed: https://developer.android.com/studio
 - JDK 17 (bundled with Android Studio)
@@ -34,7 +38,7 @@ Add inside `<application>` tag:
 ```xml
 <meta-data
     android:name="com.google.android.gms.ads.APPLICATION_ID"
-    android:value="ca-app-pub-7225653287350149~8772769864"/>
+    android:value="ca-app-pub-3940256099942544~3347511713"/>
 ```
 
 ---

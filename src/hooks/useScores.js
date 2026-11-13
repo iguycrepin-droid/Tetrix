@@ -1,85 +1,82 @@
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseConfigured, SUPABASE_SETUP_MESSAGE } from '../lib/supabase'
 import { useAuth } from './useAuth'
 
+function isFunctionMissing(error) {
+  if (!error) return false
+  const status = error.context?.status
+  if (status === 404) return true
+  const msg = String(error.message || '')
+  return /not found|Failed to send a request/i.test(msg)
+}
+
 export function useScores() {
-  const { user, profile, updateProfile } = useAuth()
+  const { user, fetchProfile } = useAuth()
 
-  async function submitScore({ score, level, lines, duration }) {
-    if (!user) return
+  async function submitScore({ score, level, lines, duration, clientGameId }) {
+    if (!user || !supabase || !clientGameId) return { ok: false, reason: 'guest' }
 
-    const { error: scoreError } = await supabase.from('scores').insert({
-      user_id: user.id,
-      score,
-      level_reached: level,
-      lines_cleared: lines,
-      duration_seconds: Math.floor(duration / 1000),
-    })
-    if (scoreError) console.warn('Score insert failed:', scoreError.message)
-
-    const current = profile || {}
-    const updates = {
-      total_games: (current.total_games || 0) + 1,
-      total_lines: (current.total_lines || 0) + lines,
-      playtime_seconds: (current.playtime_seconds || 0) + Math.floor(duration / 1000),
-    }
-    if (score > (current.best_score || 0)) {
-      updates.best_score = score
-      updates.best_level = level
+    const args = {
+      p_score: Math.floor(score),
+      p_level: Math.floor(level),
+      p_lines: Math.floor(lines),
+      p_duration_seconds: Math.max(0, Math.floor(duration / 1000)),
+      p_client_game_id: clientGameId,
     }
 
-    try {
-      await updateProfile(updates)
-    } catch (err) {
-      console.warn('Profile update failed:', err.message)
+    let data = null
+    let error = null
+    const invoked = await supabase.functions.invoke('submit-score', { body: args })
+    if (!invoked.error && invoked.data?.ok) {
+      data = invoked.data
+    } else if (isFunctionMissing(invoked.error)) {
+      const rpc = await supabase.rpc('submit_score', args)
+      data = rpc.data
+      error = rpc.error
+    } else {
+      error = invoked.error
     }
+
+    if (error) {
+      console.warn('Score submit failed:', error.message || error)
+      return { ok: false }
+    }
+    if (!data?.duplicate) {
+      try { await fetchProfile(user.id) } catch (err) {
+        console.warn('Profile refresh failed:', err.message)
+      }
+    }
+    return data || { ok: true }
   }
 
   async function getLeaderboard(type = 'alltime', limit = 100) {
+    if (!supabaseConfigured || !supabase) throw new Error(SUPABASE_SETUP_MESSAGE)
     if (type === 'weekly') {
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      // Fix: use two separate queries to avoid join RLS issues
-      const { data: scores } = await supabase
-        .from('scores')
-        .select('score, level_reached, lines_cleared, created_at, user_id')
-        .gte('created_at', weekAgo)
-        .order('score', { ascending: false })
+      const { data, error } = await supabase
+        .from('weekly_leaderboard')
+        .select('*')
+        .order('best_score', { ascending: false })
         .limit(limit)
-
-      if (!scores || scores.length === 0) return []
-
-      // Fetch profiles for the user_ids we got
-      const userIds = [...new Set(scores.map(s => s.user_id))]
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username, avatar_id')
-        .in('id', userIds)
-
-      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
-
-      return scores.map(row => ({
-        ...row,
-        username: profileMap[row.user_id]?.username,
-        avatar_id: profileMap[row.user_id]?.avatar_id,
-        best_score: row.score,
-        best_level: row.level_reached,
-      }))
+      if (error) throw error
+      return data || []
     }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('leaderboard_view')
       .select('*')
       .order('best_score', { ascending: false })
       .limit(limit)
+    if (error) throw error
     return data || []
   }
 
   async function getPersonalBests(limit = 10) {
-    if (!user) return []
-    const { data } = await supabase
+    if (!user || !supabase) return []
+    const { data, error } = await supabase
       .from('scores')
       .select('*')
       .eq('user_id', user.id)
       .order('score', { ascending: false })
       .limit(limit)
+    if (error) throw error
     return data || []
   }
 

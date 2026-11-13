@@ -3,8 +3,9 @@ import { useConsent } from '../components/ConsentBanner'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { adsAreRemoved } from '../lib/iap'
-import { Card, SectionTitle, Btn } from '../components/UI'
+import { Card, SectionTitle } from '../components/UI'
 import { useI18n, LANGUAGES } from '../lib/i18n'
+import { loadSettings, saveSettings } from '../lib/settings'
 
 export function SettingsPage() {
   const navigate = useNavigate()
@@ -13,14 +14,12 @@ export function SettingsPage() {
   const { profile } = useAuth()
   const isPremium = adsAreRemoved(profile)
 
-  const [settings, setSettings] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('tetrix_settings') || '{}') } catch { return {} }
-  })
+  const [settings, setSettings] = useState(() => loadSettings())
 
   function update(key, val) {
     const next = { ...settings, [key]: val }
     setSettings(next)
-    localStorage.setItem('tetrix_settings', JSON.stringify(next))
+    saveSettings(next)
   }
 
   // Free toggle — always interactive
